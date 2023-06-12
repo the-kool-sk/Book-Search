@@ -9,6 +9,7 @@ import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -20,13 +21,21 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import coil.annotation.ExperimentalCoilApi
 import coil.compose.rememberImagePainter
 import com.ptb.booksearch.R
 import com.ptb.booksearch.libraraysearch.data.models.Document
 import com.ptb.booksearch.libraraysearch.data.models.SearchResults
+import com.ptb.booksearch.libraraysearch.presentation.viewmodels.LibrarySearchViewModel
+import com.ptb.booksearch.navigation.Screens
 import com.ptb.booksearch.network.ApiState
 import com.ptb.booksearch.network.Status
+import com.ptb.booksearch.ui.theme.BookSearchAppTheme
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 @Composable
@@ -55,21 +64,21 @@ fun SearchBar(query: String, onTextChanged: (String) -> Unit) {
 
 
 @Composable
-fun SearchResultList(list: List<Document>) {
+fun SearchResultList(list: List<Document>, onBookItemClicked : (Document) -> Unit) {
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         items(list.size) { index ->
-            BooksListItem(list[index])
+            BooksListItem(list[index],onBookItemClicked)
         }
     }
 }
 
-@OptIn(ExperimentalCoilApi::class)
+@OptIn(ExperimentalCoilApi::class, ExperimentalMaterialApi::class)
 @Composable
-fun BooksListItem(book: Document) {
+fun BooksListItem(book: Document, onBookItemClicked : (Document) -> Unit) {
     Card(
         modifier = Modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -80,7 +89,8 @@ fun BooksListItem(book: Document) {
                 MaterialTheme.shapes.medium
             ),
         elevation = 4.dp,
-        shape = MaterialTheme.shapes.medium
+        shape = MaterialTheme.shapes.medium,
+        onClick = {onBookItemClicked(book)}
     ) {
         Row(
             modifier = Modifier
@@ -128,7 +138,8 @@ fun BooksListItem(book: Document) {
 fun HomeScreen(
     query: String,
     state: ApiState<SearchResults>,
-    onTextChanged: (String) -> Unit
+    onTextChanged: (String) -> Unit,
+    onBookItemClicked : (Document) -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -158,7 +169,7 @@ fun HomeScreen(
                     Status.SUCCESS -> {
                         if (state.data?.documents?.isNotEmpty() == true) {
                             Text(text = "${state.data?.numFound ?: 0} Results found", modifier = Modifier.padding(start = 16.dp))
-                            SearchResultList(state.data.documents)
+                            SearchResultList(state.data.documents, onBookItemClicked)
                         } else {
                             val message =
                                 "No books found for your keyword try searching something different."
@@ -236,8 +247,29 @@ fun CircularProgressBar() {
     }
 }
 
+@Composable
+fun BooksListingScreen(navController: NavController){
+    val librarySearchViewModel = hiltViewModel<LibrarySearchViewModel>()
+    BookSearchAppTheme(
+        content = {
+            val state = librarySearchViewModel.searchResultsFlow.collectAsState()
+            val queryText = rememberSaveable { mutableStateOf("") }
+            val scope = rememberCoroutineScope()
+            HomeScreen(queryText.value, state.value, { updatedText ->
+                queryText.value = updatedText
+                scope.launch {
+                    delay(300)
+                    librarySearchViewModel.search(queryText.value)
+                }
+            }, onBookItemClicked = {
+                navController.navigate(Screens.BookDetailsScreen.route)
+            })
+        }
+    )
+}
+
 @Preview
 @Composable
 fun HomeScreenPreview() {
-    HomeScreen("hello", ApiState.init()) {}
+    HomeScreen("hello", ApiState.init(), onTextChanged = {}, onBookItemClicked = {})
 }

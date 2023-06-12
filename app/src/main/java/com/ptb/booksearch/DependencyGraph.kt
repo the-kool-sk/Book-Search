@@ -7,9 +7,13 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import okhttp3.Cache
 import okhttp3.MediaType
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import java.io.File
+
 
 //Simple dependency graph, in a real app this would be Dagger
 
@@ -22,7 +26,10 @@ object DependencyGraph {
 
     @OptIn(ExperimentalSerializationApi::class)
     fun provide(context: Context) {
+        val logging = HttpLoggingInterceptor()
+        logging.setLevel(HttpLoggingInterceptor.Level.BODY)
         okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(logging)
             .cache(
                 Cache(
                     File(context.cacheDir, "http_cache"),
@@ -34,7 +41,7 @@ object DependencyGraph {
         val json = Json { ignoreUnknownKeys = true }
         retrofit = Retrofit.Builder()
             .baseUrl(apiBaseUrl)
-            .addConverterFactory(json.asConverterFactory(MediaType.parse("application/json")!!))
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .client(okHttpClient)
             .build()
 
